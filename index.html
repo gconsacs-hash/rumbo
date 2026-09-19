@@ -273,6 +273,11 @@ code{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(-
               <button class="btn ghost sm" id="copyKey">Copiar clave</button>
               <button class="btn ghost sm" id="editKey">Usar otra clave</button>
             </div>
+            <button class="btn sm" id="showQr">Mostrar código QR para el celular</button>
+            <div id="qrBox" hidden style="text-align:center">
+              <div id="qrImg" style="display:inline-block;background:#fff;padding:12px;border-radius:12px;line-height:0"></div>
+              <div class="hint">Abre la <b>cámara</b> del celular, apunta al código y toca el enlace que aparece. La app se abre ya conectada con esta clave.</div>
+            </div>
             <div class="inline">
               <button class="btn sm" id="fbConnect">Conectar</button>
               <button class="btn ghost sm" id="fbDisconnect">Desconectar</button>
@@ -460,6 +465,7 @@ function parseFbConfig(txt){
 }
 async function connectFb(){
   const cfgFb = LS.get('fb'); if(!cfgFb || !cfgFb.config || !cfgFb.space) return;
+  if(S.fb&&S.fb.unsub){ S.fb.unsub(); S.fb=null; } // evitar suscripciones duplicadas
   setFb('connecting');
   try{
     for(const s of FB_SDK) await loadScript(s);
@@ -723,12 +729,40 @@ $('#fbConnect').addEventListener('click',()=>{
 });
 $('#fbDisconnect').addEventListener('click',disconnectFb);
 
+// ---- código QR: enlace a esta misma app con la clave incluida (#clave=...)
+function connectWithKey(space){
+  const prev=LS.get('fb'); const conf=(prev&&prev.config)||FB_DEFAULT;
+  LS.set('fb',{config:conf, space}); S.pendingSpace=null;
+  if(S.fb&&S.fb.unsub){ S.fb.unsub(); S.fb=null; }
+  connectFb();
+}
+$('#showQr').addEventListener('click',async()=>{
+  let fb=LS.get('fb');
+  if(!fb||!fb.space){ connectWithKey(S.pendingSpace||newKey()); fb=LS.get('fb'); }
+  const link = location.origin + location.pathname + '#clave=' + fb.space;
+  try{
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js');
+    const qr = qrcode(0,'M'); qr.addData(link); qr.make();
+    $('#qrImg').innerHTML = qr.createSvgTag({cellSize:6, margin:0, scalable:true});
+    $('#qrImg').firstChild.style.width='min(260px, 80vw)'; $('#qrImg').firstChild.style.height='auto';
+    $('#qrBox').hidden=false;
+  }catch(e){ toast('No se pudo generar el QR (¿sin internet?)'); }
+});
+// Si la app se abrió desde el QR (#clave=...), tomar la clave del enlace y conectar
+function handleHashKey(){
+  const m = /[#&]clave=([a-z0-9_-]+)/i.exec(location.hash||'');
+  if(!m) return false;
+  history.replaceState(null,'',location.pathname);
+  connectWithKey(m[1].toLowerCase()); toast('Clave recibida: conectando…');
+  return true;
+}
+
 // ================================================================ inicio
 buildNav();
 const v=LS.get('view')||'resumen'; showView(NAV.some(n=>n[0]===v)?v:'resumen');
 { const fb=LS.get('fb'); if(!fb||!fb.space) S.pendingSpace=newKey(); }
 render();
-connectFb();
+if(!handleHashKey()) connectFb();
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 })();
 </script>
