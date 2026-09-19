@@ -273,30 +273,19 @@ code{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(-
               <button class="btn ghost sm" id="copyKey">Copiar clave</button>
               <button class="btn ghost sm" id="editKey">Usar otra clave</button>
             </div>
-            <label>Configuración de Firebase (pega aquí el bloque <code>firebaseConfig</code> de tu proyecto)
-              <textarea id="fbConfig" placeholder='const firebaseConfig = {
-  apiKey: "AIza...",
-  authDomain: "rumbo-xxxx.firebaseapp.com",
-  projectId: "rumbo-xxxx",
-  appId: "1:1234:web:abcd"
-};'></textarea>
-            </label>
             <div class="inline">
               <button class="btn sm" id="fbConnect">Conectar</button>
               <button class="btn ghost sm" id="fbDisconnect">Desconectar</button>
             </div>
           </div>
+          <div class="hint">Para ver los mismos datos en otro dispositivo: abre esta misma página allá, pulsa <b>Usar otra clave</b>, escribe la clave de arriba y luego <b>Conectar</b>.</div>
           <details class="mt">
-            <summary style="cursor:pointer;font-size:13px;font-weight:600">Cómo crear el proyecto Firebase (una sola vez, gratis)</summary>
-            <ol class="steps">
-              <li>Entra a <b>console.firebase.google.com</b> con tu Gmail → <b>Crear proyecto</b> (nombre: rumbo). Desactiva Analytics.</li>
-              <li>En el proyecto: <b>Compilación → Authentication → Comenzar → Anónimo → Habilitar</b>.</li>
-              <li><b>Compilación → Firestore Database → Crear base de datos</b> → modo producción → ubicación southamerica-east1.</li>
-              <li>En Firestore, pestaña <b>Reglas</b>, reemplaza todo por:<br>
-<code>rules_version = '2';<br>service cloud.firestore {<br>&nbsp;&nbsp;match /databases/{database}/documents {<br>&nbsp;&nbsp;&nbsp;&nbsp;match /spaces/{space}/docs/{doc} {<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allow read, write: if request.auth != null;<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>}</code><br>y <b>Publicar</b>.</li>
-              <li>Ícono de engranaje → <b>Configuración del proyecto → Tus apps → Web (&lt;/&gt;)</b> → nombre "rumbo" → Registrar. Copia el bloque <code>firebaseConfig</code> y pégalo arriba.</li>
-              <li>Pulsa <b>Conectar</b>. En el celular abre la misma página, pega la misma configuración y la <b>misma clave</b>.</li>
-            </ol>
+            <summary style="cursor:pointer;font-size:13px;font-weight:600">Avanzado: usar otro proyecto Firebase</summary>
+            <div class="form mt">
+              <label>Pega aquí el bloque <code>firebaseConfig</code> de tu proyecto (si lo dejas vacío se usa el proyecto incorporado)
+                <textarea id="fbConfig" placeholder='const firebaseConfig = { apiKey: "...", projectId: "...", appId: "..." };'></textarea>
+              </label>
+            </div>
           </details>
         </div>
         <div class="card section">
@@ -459,6 +448,8 @@ function saveMonth(m, mk){ ensureConfigSaved(); saveDoc('mes-'+(mk||S.mk), m); }
 function saveFondo(f){ ensureConfigSaved(); saveDoc('fondo', f); }
 
 // ---- Firebase
+// Proyecto Firebase del usuario (el apiKey es un identificador público; la seguridad la dan las reglas de Firestore)
+const FB_DEFAULT = { apiKey:"AIzaSyDmeaIi8ywuhr2CsADVgNwScnX-He8LSmo", authDomain:"rumbo-3ba8c.firebaseapp.com", projectId:"rumbo-3ba8c", appId:"1:6067423345:web:a266fd90967dbbf73673d0" };
 const FB_SDK = ['https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js','https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js','https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js'];
 function loadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[src="${src}"]`)) return res(); const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('No se pudo cargar '+src)); document.head.appendChild(s); }); }
 function setFb(state,msg){ S.fbState=state; S.fbMsg=msg||''; const el=$('#sync'); el.className='sync '+(state==='on'?'on':state==='err'?'err':'local'); el.querySelector('span').textContent = state==='on'?'Sincronizado':state==='err'?'Error de sincronización':state==='connecting'?'Conectando…':'Solo en este dispositivo'; renderSyncCard(); }
@@ -625,8 +616,8 @@ function renderSyncCard(){
   const fb=LS.get('fb');
   $('#spaceKey').textContent = (fb&&fb.space) || S.pendingSpace || '—';
   const st=$('#syncStatus');
-  st.innerHTML = S.fbState==='on' ? `<span class="chip good">Sincronizado</span> ${esc(S.fbMsg)}` : S.fbState==='err' ? `<span class="chip bad">Error</span> ${esc(S.fbMsg)}` : S.fbState==='connecting' ? `<span class="chip warn">Conectando…</span>` : `<span class="chip">Solo en este dispositivo</span> Los datos se guardan en este navegador. Configura Firebase para verlos también en el celular.`;
-  if(fb&&fb.config&&!$('#fbConfig').value) $('#fbConfig').value = JSON.stringify(fb.config,null,2);
+  st.innerHTML = S.fbState==='on' ? `<span class="chip good">Sincronizado</span> ${esc(S.fbMsg)}` : S.fbState==='err' ? `<span class="chip bad">Error</span> ${esc(S.fbMsg)}` : S.fbState==='connecting' ? `<span class="chip warn">Conectando…</span>` : `<span class="chip">Solo en este dispositivo</span> Los datos se guardan solo en este navegador. Pulsa <b>Conectar</b> para sincronizarlos con tus otros dispositivos.`;
+  if(fb&&fb.config&&fb.config.projectId!==FB_DEFAULT.projectId&&!$('#fbConfig').value) $('#fbConfig').value = JSON.stringify(fb.config,null,2);
 }
 function renderAjustes(){
   const st=cfg();
@@ -722,7 +713,9 @@ function newKey(){ const a='abcdefghjkmnpqrstuvwxyz23456789'; let s=''; for(let 
 $('#copyKey').addEventListener('click',()=>{ const k=$('#spaceKey').textContent; if(navigator.clipboard) navigator.clipboard.writeText(k).then(()=>toast('Clave copiada')); else toast(k); });
 $('#editKey').addEventListener('click',()=>{ const cur=$('#spaceKey').textContent; const k=prompt('Clave de sincronización (pega la del otro dispositivo o deja esta):', cur==='—'?newKey():cur); if(k&&k.trim()){ S.pendingSpace=k.trim().toLowerCase().replace(/[^a-z0-9_-]/g,''); const fb=LS.get('fb'); if(fb){ fb.space=S.pendingSpace; LS.set('fb',fb); } renderSyncCard(); toast('Clave actualizada. Pulsa Conectar.'); } });
 $('#fbConnect').addEventListener('click',()=>{
-  const conf=parseFbConfig($('#fbConfig').value); if(!conf){ toast('Configuración incompleta: faltan apiKey, projectId o appId'); return; }
+  const txt=$('#fbConfig').value.trim();
+  const conf = txt ? parseFbConfig(txt) : FB_DEFAULT;
+  if(!conf){ toast('Configuración incompleta: faltan apiKey, projectId o appId'); return; }
   const prev=LS.get('fb'); const space=S.pendingSpace || (prev&&prev.space) || newKey();
   LS.set('fb',{config:conf, space}); S.pendingSpace=null;
   if(S.fb&&S.fb.unsub){ S.fb.unsub(); S.fb=null; }
